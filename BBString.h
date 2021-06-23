@@ -94,38 +94,64 @@ bool bbs_contains_char(char* text, char c)
 
 bbs_StringArray bbs_split(char* text, char* delimiters) //todo get rid of mallocs
 {
-	bbs_StringArray result;
-	result.count = 0;
+	bbs_StringArray* result = (bbs_StringArray*)&string_arena[arena_write_index];
+	(*result).count = 0;
 	int text_cursor = 0;
 	int u = 0;
 	bool was_delimiter = true;
-	result.strings = malloc(500); //todo get rid of malloc
-	while(text_cursor < strlen(text))
+
+	int str_len = strlen(text);
+	while(text_cursor <  str_len)
 	{
-		if(bbs_contains_char(delimiters,text[text_cursor]))
+		if(bbs_contains_char(delimiters, text[text_cursor]))
 		{
 			was_delimiter = true;
-			int len = strlen(result.strings[result.count-1]);
-			result.strings[result.count-1][len] = 0;
-			//result.strings[result.count-1].length = strlen(result.strings[result.count-1].chars);
-			u = 0;
 		}
 		else
 		{
 			if(was_delimiter){
-				result.strings[result.count++] = malloc(600); //todo get rid of malloc
-				for (int i = 0; i < 17; ++i)
-				{
-					result.strings[result.count-1][i] = 0;
-				}
+				(*result).count++;
 			}
 
 			was_delimiter = false;
-			result.strings[result.count-1][u++] = text[text_cursor];
 		}
+		
 		text_cursor++;
 	}
-	return result;
+
+	text_cursor = 0;
+	
+	(*result).strings = (char**)((&(result -> strings))+1);
+	arena_write_index += sizeof(bbs_StringArray) + (((*result).count+1)*sizeof(char*));
+	u = 0;
+
+	for (int i = 0; i < (*result).count; ++i)
+	{
+		(*result).strings[i] = (char*)&string_arena[arena_write_index];
+		while(text_cursor <  str_len)
+		{
+			if(bbs_contains_char(delimiters, text[text_cursor]))
+			{
+				was_delimiter = true;
+				(result -> strings)[i][u] = 0;
+				u = 0;
+				while(bbs_contains_char(delimiters, text[text_cursor]))
+					text_cursor++;
+				break;
+			}
+			else
+			{
+				was_delimiter = false;
+				result -> strings[i][u++] = text[text_cursor];
+			}
+			
+			text_cursor++;
+		}
+
+		arena_write_index += strlen((*result).strings[i])+1;
+	}
+
+	return (*result);
 }
 
 bool bbs_contains(char* text, char* substring)
