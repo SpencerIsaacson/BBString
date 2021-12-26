@@ -1,0 +1,24 @@
+
+BBString is a quick and dirty string manipulation library for C. The library
+is guaranteed to work with C99 and above.
+
+    I. Limitations and design
+
+This library is designed for quick and dirty usage for applications like games.
+You can not use this library from multiple threads. This library has imprecise
+parsing of floating-point numbers. Otherwise the library is optimized for
+speed.
+
+    II. Usage
+
+In every translation unit where you wish to use the library, simply include
+the header:
+
+    #include <BBString.h>
+
+And in EXACTLY ONE translation unit, you have to include the library together
+while defining bbs_implementation, like this:
+
+    #define bbs_implementation
+    #include <BBString.h>
+

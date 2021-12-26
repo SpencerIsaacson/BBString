@@ -11,13 +11,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-//8 megabytes of string storage, 1 kilobyte of scratch space
-#define arena_size 1024*1024*8
-#define scratch_pad_size 1024
+#if !defined(arena_size)
+    #define arena_size 1024*1024*8
+#endif
 
-int arena_write_index = 0;
-char string_arena[arena_size];
-char scratch_pad[scratch_pad_size];
+#if !defined(scratch_pad_size)
+    #define scratch_pad_size 1024
+#endif
+
+extern int arena_write_index;
+extern char string_arena[arena_size];
+extern char scratch_pad[scratch_pad_size];
 
 typedef struct bbs_string
 {
@@ -31,8 +35,42 @@ typedef struct bbs_StringList
 	bbs_string* strings;
 } bbs_StringList;
 
-#define bbs_get_count(x) sizeof(x)/sizeof(x[0])
-#define bbs_to_string_list(x) ((bbs_StringList){ .strings = x, .count = bbs_get_count(x) })
+#define bbs_to_string_list(x) ((bbs_StringList){ \
+    .strings = x,\
+    .count = sizeof(x)/sizeof(x[0])\
+})
+
+extern int bbs_c_string_length(char* c_str);
+extern bbs_string bbs_from_c_str(char* c_str);
+extern void bbs_clear_arena();
+extern void bbs_print(bbs_string text);
+extern bbs_string bbs_join(bbs_StringList string_list, bbs_string separator);
+extern bool bbs_contains_char(bbs_string text, char c);
+extern bbs_StringList bbs_split(bbs_string text, bbs_string delimiters);
+extern bool bbs_contains(bbs_string text, bbs_string substring);
+extern int bbs_index_of(bbs_string text, bbs_string substring);
+extern bbs_string bbs_substring(bbs_string text, int index, int count);
+extern bbs_string bbs_replace(bbs_string text, bbs_string to_replace, bbs_string with);
+extern bbs_string bbs_delete_substring(bbs_string text, bbs_string substring);
+extern bbs_string bbs_delete_at(bbs_string text, int index, int count);
+extern bbs_string bbs_insert(bbs_string text, bbs_string substring, int index);
+extern bool bbs_string_equals(bbs_string a, bbs_string b);
+extern bbs_string bbs_concatenate(bbs_string a, bbs_string b);
+extern int bbs_parse_int(bbs_string text);
+extern float bbs_parse_float();
+extern double bbs_parse_double();
+
+
+
+//TODO add string builder stuff?
+
+
+
+#if defined(bbs_implementation)
+
+int arena_write_index = 0;
+char string_arena[arena_size];
+char scratch_pad[scratch_pad_size];
 
 int bbs_c_string_length(char* c_str) //replacement for strlen
 {
@@ -278,7 +316,6 @@ bool bbs_string_equals(bbs_string a, bbs_string b)
 	return true;
 }
 
-
 bbs_string bbs_concatenate(bbs_string a, bbs_string b)
 {
 	char* result = &string_arena[arena_write_index];
@@ -294,28 +331,22 @@ bbs_string bbs_concatenate(bbs_string a, bbs_string b)
 	return (bbs_string){ .length = total_length, .chars = result };
 }
 
-int bbs_parse_int(bbs_string text) //assumes valid decimal integer string
+// If text is a valid base-10 decimal string, this function returns
+// the number that it represents.
+// Otherwise the return value is undefined
+int bbs_parse_int(bbs_string text)
 {
-    int digit_count = text.length;
-    int result = 0;
-    char look_up_place_value[10] = "0123456789";
-    
-    for (int i = 0; i < digit_count; ++i)
-    {
-        int tenspower = digit_count-(i+1);
-        int place_value = 0;
-        
-        for (int x = 0; x < 10; ++x)
-            if(text.chars[i] == look_up_place_value[x])
-                place_value = x;
-
-        for (int i = 0; i < tenspower; ++i)
-            place_value*=10;
-
-        result += place_value;
+    char *str = text.chars;
+    int i = 0;
+    int n = text.length;
+    if(str[0]=='-') ++i;
+    int res = 0;
+    while(i!=n) {
+        res = 10*res + str[i]-'0';
+        ++i;
     }
-
-    return result;
+    if(str[0]=='-') res = -res;
+    return res;
 }
 
 float bbs_parse_float()
@@ -328,6 +359,5 @@ double bbs_parse_double()
 	assert(false); //not implemented. TODO
 }
 
-
-//TODO add string builder stuff?
+#endif
 #endif
