@@ -3,9 +3,6 @@
 	Spencer Isaacson aka Baremetal Baron 2021
 */
 
-//todo add asserts to ensure you're not going out of the available space
-//todo replace unnecessary strlens
-
 #ifndef BaremetalBaronString
 #define BaremetalBaronString
 #include <assert.h>
@@ -26,28 +23,32 @@ typedef struct bbs_string
 {
 	int length;
 	char* chars;
-} bbs_string; //todo put into use
+} bbs_string;
 
-typedef struct bbs_StringArray
+typedef struct bbs_StringList
 {
 	int count;
-	char** strings;
-} bbs_StringArray;
+	bbs_string* strings;
+} bbs_StringList;
 
-void bbs_clear_scratchpad()
+#define bbs_get_count(x) sizeof(x)/sizeof(x[0])
+#define bbs_to_string_list(x) ((bbs_StringList){ .strings = x, .count = bbs_get_count(x) })
+
+int bbs_c_string_length(char* c_str) //replacement for strlen
 {
-	for (int i = 0; i < scratch_pad_size; ++i)
-	{
-		scratch_pad[i] = 0;
-	}
+	int n = 0;
+	while(c_str[n++] != 0);
+	return n-1;
 }
 
-void bbs_clear_pool()
+bbs_string bbs_from_c_str(char* c_str)
 {
-	for (int i = 0; i < arena_size; ++i)
-	{
-		string_arena[i] = 0;
-	}
+	return (bbs_string){.length = bbs_c_string_length(c_str), .chars = c_str };
+}
+
+void bbs_clear_arena()
+{
+	memset(string_arena, 0, arena_size);
 }
 
 void bbs_print(bbs_string text)
@@ -55,62 +56,56 @@ void bbs_print(bbs_string text)
 	printf("%.*s\n", text.length, text.chars);
 }
 
-char* bbs_join(char** strings, int count, char* separator)
+bbs_string bbs_join(bbs_StringList string_list, bbs_string separator)
 {
 	int n = 0;
-	for (int i = 0; i < count; ++i)
+	for (int i = 0; i < string_list.count; ++i)
 	{
-		for (int c = 0; c < strlen(strings[i]); ++c)
-		{
-			scratch_pad[n++] = strings[i][c];
-		}
+		for (int c = 0; c < string_list.strings[i].length; ++c)
+			scratch_pad[n++] = string_list.strings[i].chars[c];
 
-		if(i<count-1)
+		if(i < string_list.count-1)
 		{
-			for (int c = 0; c < strlen(separator); ++c)
-			{
-				scratch_pad[n++] = separator[c];
-			}
+			for (int c = 0; c < separator.length; ++c)
+				scratch_pad[n++] = separator.chars[c];
 		}
 	}
 
-	scratch_pad[n] = 0; //null terminate
-
 	char* result = &string_arena[arena_write_index];
-	for (int i = 0; i < strlen(scratch_pad); ++i)
-		result[i] = scratch_pad[i];
-	arena_write_index += strlen(result);
-	return result;
+	memcpy(result, scratch_pad, n);
+	memset(scratch_pad, 0, n);
+
+	arena_write_index += n;
+	return (bbs_string){ .length = n, .chars = result };
 }
 
-bool bbs_contains_char(char* text, char c)
+bool bbs_contains_char(bbs_string text, char c)
 {
-	for (int i = 0; i < strlen(text); ++i)
-		if(text[i] == c)
+	for (int i = 0; i < text.length; ++i)
+		if(text.chars[i] == c)
 			return true;
 
 	return false;
 }
 
-bbs_StringArray bbs_split(char* text, char* delimiters) //todo get rid of mallocs
+bbs_StringList bbs_split(bbs_string text, bbs_string delimiters)
 {
-	bbs_StringArray* result = (bbs_StringArray*)&string_arena[arena_write_index];
-	(*result).count = 0;
+	bbs_StringList result;
+	result.count = 0;
 	int text_cursor = 0;
 	int u = 0;
 	bool was_delimiter = true;
 
-	int str_len = strlen(text);
-	while(text_cursor <  str_len)
+	while(text_cursor <  text.length)
 	{
-		if(bbs_contains_char(delimiters, text[text_cursor]))
+		if(bbs_contains_char(delimiters, text.chars[text_cursor]))
 		{
 			was_delimiter = true;
 		}
 		else
 		{
 			if(was_delimiter){
-				(*result).count++;
+				result.count++;
 			}
 
 			was_delimiter = false;
@@ -121,48 +116,48 @@ bbs_StringArray bbs_split(char* text, char* delimiters) //todo get rid of malloc
 
 	text_cursor = 0;
 	
-	(*result).strings = (char**)((&(result -> strings))+1);
-	arena_write_index += sizeof(bbs_StringArray) + (((*result).count+1)*sizeof(char*));
+	result.strings = (bbs_string*)&string_arena[arena_write_index];
+	arena_write_index += sizeof(bbs_string)*result.count;
 	u = 0;
 
-	for (int i = 0; i < (*result).count; ++i)
+	for (int i = 0; i < result.count; ++i)
 	{
-		(*result).strings[i] = (char*)&string_arena[arena_write_index];
-		while(text_cursor <  str_len)
+		result.strings[i].chars = (char*)&string_arena[arena_write_index];
+		while(text_cursor <  text.length)
 		{
-			if(bbs_contains_char(delimiters, text[text_cursor]))
+			if(bbs_contains_char(delimiters, text.chars[text_cursor]))
 			{
 				was_delimiter = true;
-				(result -> strings)[i][u] = 0;
+				result.strings[i].length = u;
 				u = 0;
-				while(bbs_contains_char(delimiters, text[text_cursor]))
+				while(bbs_contains_char(delimiters, text.chars[text_cursor]))
 					text_cursor++;
 				break;
 			}
 			else
 			{
 				was_delimiter = false;
-				result -> strings[i][u++] = text[text_cursor];
+				result.strings[i].chars[u++] = text.chars[text_cursor];
 			}
 			
 			text_cursor++;
 		}
 
-		arena_write_index += strlen((*result).strings[i])+1;
+		arena_write_index += result.strings[i].length;
 	}
 
-	return (*result);
+	return result;
 }
 
-bool bbs_contains(char* text, char* substring)
+bool bbs_contains(bbs_string text, bbs_string substring)
 {
 	int text_cursor = 0;
 	int substring_cursor = 0;
-	while(text_cursor < strlen(text))
+	while(text_cursor < text.length)
 	{
-		if(substring_cursor < strlen(substring))
+		if(substring_cursor < substring.length)
 		{
-			if(text[text_cursor] == substring[substring_cursor])
+			if(text.chars[text_cursor] == substring.chars[substring_cursor])
 				substring_cursor++;
 			else substring_cursor = 0;
 		}
@@ -174,15 +169,15 @@ bool bbs_contains(char* text, char* substring)
 	return false;
 }
 
-int bbs_index_of(char* text, char* substring)
+int bbs_index_of(bbs_string text, bbs_string substring)
 {
 	int text_cursor = 0;
 	int substring_cursor = 0;
-	while(text_cursor < strlen(text))
+	while(text_cursor < text.length)
 	{
-		if(substring_cursor < strlen(substring))
+		if(substring_cursor < substring.length)
 		{
-			if(text[text_cursor] == substring[substring_cursor])
+			if(text.chars[text_cursor] == substring.chars[substring_cursor])
 				substring_cursor++;
 			else substring_cursor = 0;
 		}
@@ -194,131 +189,133 @@ int bbs_index_of(char* text, char* substring)
 	return -1;
 }
 
-char* bbs_replace(char* text, char* to_replace, char* with)
+bbs_string bbs_substring(bbs_string	text, int index, int count)
+{
+	assert((index+count) < text.length);
+
+	return (bbs_string){ .length = count, .chars = text.chars+index };
+}
+
+bbs_string bbs_replace(bbs_string text, bbs_string to_replace, bbs_string with)
 {
 	int index = bbs_index_of(text,to_replace);
 	if(index > -1)
 	{
 		for (int i = 0; i < index; ++i)
-		{
-			scratch_pad[i] = text[i];
-		}
-		for (int i = 0; i < strlen(with); ++i)
-		{
-			scratch_pad[i+index] = with[i];
-		}
-		for (int scratch_index = index+strlen(with), text_index = index+strlen(to_replace); text_index < strlen(text); scratch_index++, text_index++)
-		{
-			scratch_pad[scratch_index] = text[text_index];
-		}
-
-		scratch_pad[strlen(text)+strlen(with)-strlen(to_replace)] = 0; //null terminate
+			scratch_pad[i] = text.chars[i];
+		for (int i = 0; i < with.length; ++i)
+			scratch_pad[i+index] = with.chars[i];
+		for (int i = index+with.length, text_index = index+to_replace.length; text_index < text.length; i++, text_index++)
+			scratch_pad[i] = text.chars[text_index];
 
 		char* result = &string_arena[arena_write_index];
 
-		for (int i = 0; i <= strlen(scratch_pad); ++i)
-			result[i] = scratch_pad[i];
+		int n = bbs_c_string_length(scratch_pad);
+		memcpy(result, scratch_pad, n);
+		memset(scratch_pad, 0, n);
 
-		arena_write_index += strlen(result)+1;				
-		return result;
+		arena_write_index += n;
+		return (bbs_string){ .length = n, .chars = result };
 	}
-	return text;
+
+	return text; //if to_replace is not contained in the original text, return the original text unmodified
 }
 
-char* bbs_delete_substring(char* text, char* substring)
+bbs_string bbs_delete_substring(bbs_string text, bbs_string substring)
 {
-	bbs_clear_scratchpad();
-	bbs_replace(text,substring, "");
+	return bbs_replace(text, substring, (bbs_string){ .length = 0, .chars = NULL });
 }
 
-char* bbs_delete_at(char* text, int index, int count)
+bbs_string bbs_delete_at(bbs_string text, int index, int count)
 {
-	if((index+count) >= strlen(text))//todo verify not off by one
-		return NULL;
+	assert((index+count) < text.length);
 
 	char* result = &string_arena[arena_write_index];
 
 	for (int i = 0; i < index; i++)
-	{
-		result[i] = text[i];
-	}
+		result[i] = text.chars[i];
 
-	for (int i = index+count; i < strlen(text); ++i)
-	{
-		result[i-count] = text[i];
-	}
+	for (int i = index+count; i < text.length; ++i)
+		result[i-count] = text.chars[i];
 
-	int length = strlen(text)-count;
-	result[length] = 0; //null terminate
-	arena_write_index += length;//todo make sure this isn't an off-by-one
-	return result;
+	int n = text.length-count;
+	arena_write_index += n;
+	return (bbs_string){ .length = n, .chars = result };
 }
 
-char* bbs_insert(char* text, char* substring, int index)
+bbs_string bbs_insert(bbs_string text, bbs_string substring, int index)
 {
-	if(index >= strlen(text))
-		return NULL;
+	assert(index < text.length);
 
 	for (int i = 0; i < index; ++i)
-		scratch_pad[i] = text[i];
+		scratch_pad[i] = text.chars[i];
 
-	for (int i = 0; i < strlen(substring); ++i)
-		scratch_pad[i+index] = substring[i];
+	for (int i = 0; i < substring.length; ++i)
+		scratch_pad[i+index] = substring.chars[i];
 
-	for (int i = index; i < strlen(text); ++i)
-		scratch_pad[strlen(substring)+i] = text[i];
-
-	scratch_pad[strlen(substring)+strlen(text)] = 0;//null terminate
+	for (int i = index; i < text.length; ++i)
+		scratch_pad[substring.length+i] = text.chars[i];
 	
 	char* result = &string_arena[arena_write_index];
 
-	for (int i = 0; i < strlen(scratch_pad); ++i)
-		result[i] = scratch_pad[i];
+	int n = bbs_c_string_length(scratch_pad);
+	memcpy(result, scratch_pad, n);
+	memset(scratch_pad, 0, n);
 
-	arena_write_index += strlen(result);
-	return result;
+	arena_write_index += n;
+	return (bbs_string){ .length = n, .chars = result };
 }
 
-bool bbs_equals(char* a, char* b)
+bool bbs_string_equals(bbs_string a, bbs_string b)
 {
-	int a_len = strlen(a);
-	int b_len = strlen(b);
-
-	if(a_len != b_len)
+	if(a.length != b.length)
 		return false;
 
-	for (int i = 0; i < a_len; ++i)
-		if(a[i] != b[i])
+	for (int i = 0; i < a.length; ++i)
+		if(a.chars[i] != b.chars[i])
 			return false;
 
-	return true;	
+	return true;
 }
 
-char* bbs_concatenate(char* a, char* b)
+
+bbs_string bbs_concatenate(bbs_string a, bbs_string b)
 {
 	char* result = &string_arena[arena_write_index];
-	int a_len = strlen(a);
-	int b_len = strlen(b);
-	int tot_len = a_len + b_len;
+	int total_length = a.length + b.length;
 
-	for (int i = 0; i < a_len; ++i)
-	{
-		result[i] = a[i];
-	}
+	for (int i = 0; i < a.length; ++i)
+		result[i] = a.chars[i];
 
-	for (int i = 0; i < b_len; ++i)
-	{
-		result[i + a_len] = b[i];
-	}
+	for (int i = 0; i < b.length; ++i)
+		result[i + a.length] = b.chars[i];
 
-	result[tot_len] = 0; //null terminate
-	arena_write_index += tot_len;//todo make sure this isn't an off-by-one
-	return result;
+	arena_write_index += total_length;
+	return (bbs_string){ .length = total_length, .chars = result };
 }
 
-int bbs_parse_int()
+int bbs_parse_int(bbs_string text) //assumes valid decimal integer string
 {
-	assert(false); //not implemented. TODO
+    int digit_count = text.length;
+    int result = 0;
+    char look_up_place_value[10] = "0123456789";
+    
+    for (int i = 0; i < digit_count; ++i)
+    {
+        int tenspower = digit_count-(i+1);
+        int place_value = 0;
+        
+        for (int x = 0; x < 10; ++x)
+            if(text.chars[i] == look_up_place_value[x])
+                place_value = x;
+
+        for (int i = 0; i < tenspower; ++i)
+            place_value*=10;
+
+        result += place_value;
+    }
+
+    return result;
 }
 
 float bbs_parse_float()
