@@ -294,28 +294,22 @@ bbs_string bbs_concatenate(bbs_string a, bbs_string b)
 	return (bbs_string){ .length = total_length, .chars = result };
 }
 
-int bbs_parse_int(bbs_string text) //assumes valid decimal integer string
+// If text is a valid base-10 decimal string, this function returns
+// the number that it represents.
+// Otherwise the return value is undefined
+int bbs_parse_int(bbs_string text)
 {
-    int digit_count = text.length;
-    int result = 0;
-    char look_up_place_value[10] = "0123456789";
-    
-    for (int i = 0; i < digit_count; ++i)
-    {
-        int tenspower = digit_count-(i+1);
-        int place_value = 0;
-        
-        for (int x = 0; x < 10; ++x)
-            if(text.chars[i] == look_up_place_value[x])
-                place_value = x;
-
-        for (int i = 0; i < tenspower; ++i)
-            place_value*=10;
-
-        result += place_value;
+    char *str = text.chars;
+    int i = 0;
+    int n = text.length;
+    if(str[0]=='-') ++i;
+    int res = 0;
+    while(i!=n) {
+        res = 10*res + str[i]-'0';
+        ++i;
     }
-
-    return result;
+    if(str[0]=='-') res = -res;
+    return res;
 }
 
 float bbs_parse_float()
